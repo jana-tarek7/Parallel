@@ -1,4 +1,5 @@
 streamlit
 mpi4py
-pillow
 numpy
+pillow
+
