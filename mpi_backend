@@ -1,0 +1,80 @@
+from flask import Flask, request, jsonify
+import subprocess
+import os
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__)
+
+# Folder to save uploaded files
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+@app.route('/run_task', methods=['POST'])
+def run_task():
+    data = request.form
+    task = data.get('task')
+    processes = data.get('processes', '2')  # default 2 processes
+
+    # Build command to run MPI job
+    cmd = [
+        "mpiexec", "-n", str(processes),  # or "mpirun"
+        "python", "alltasks.py",
+        "--task", task
+    ]
+
+    # Append parameters based on task
+    if task == "1":
+        nums = data.get('nums')
+        if nums:
+            cmd += ["--nums", nums]
+
+    if task == "3":
+        filter_type = data.get('filter')
+        if filter_type:
+            cmd += ["--filter", filter_type]
+
+    if task == "5":
+        keyword = data.get('keyword')
+        if keyword:
+            cmd += ["--keyword", keyword]
+
+    if task == "7":
+        for param in ['a_rows', 'a_cols', 'b_rows', 'b_cols', 'a_values', 'b_values']:
+            val = data.get(param)
+            if not val:
+                return jsonify({"error": f"Missing parameter {param}"}), 400
+            cmd += [f"--{param}", val]
+
+    # Handle file upload if present
+    if 'file' in request.files:
+        file = request.files['file']
+        if file.filename != '':
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(filepath)
+            cmd += ["--file", filepath]
+
+    try:
+        # Run the MPI process
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=os.path.dirname(os.path.abspath(__file__))  # cwd where alltasks.py is
+        )
+        stdout, stderr = process.communicate(timeout=120)
+        output = stdout.strip()
+        if stderr.strip():
+            output += f"\nErrors:\n{stderr.strip()}"
+
+        return jsonify({"output": output})
+
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Task timed out."}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
