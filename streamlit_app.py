@@ -49,7 +49,7 @@ elif task == "Matrix Multiplication":
 def run_mpi(task_number, args):
     cmd = [
         "mpirun", "-n", str(process_count),
-        "python", "alltasks.py",
+        "python", "C:\StreamlitParallel\alltasks.py",
         "--task", str(task_number)
     ]
     cmd.extend(args)
